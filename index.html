@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JohnScale // Biothermal OS</title>
+    <style>
+        :root {
+            --bg: #0d0e12;
+            --card-bg: #16171d;
+            --accent: #5ef1ff;
+            --text-main: #e0e0e0;
+            --text-dim: #949494;
+            --error: #ff5e5e;
+            --success: #5effa3;
+            --warmth: #ffb86c;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text-main);
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .vessel-card {
+            background: var(--card-bg);
+            padding: 2.5rem;
+            border-radius: 8px;
+            border: 1px solid #2d2f3b;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            width: 100%;
+            max-width: 420px;
+            transition: opacity 0.3s ease;
+        }
+
+        h1 { font-size: 1.2rem; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 2rem; border-bottom: 1px solid #2d2f3b; padding-bottom: 1rem; color: var(--accent); }
+
+        .input-row { display: flex; gap: 1rem; margin-bottom: 2rem; }
+        .input-group { flex: 1; }
+        label { display: block; font-size: 0.75rem; color: var(--text-dim); margin-bottom: 0.5rem; text-transform: uppercase; }
+
+        input {
+            background: #1f2029;
+            border: 1px solid #2d2f3b;
+            color: var(--accent);
+            width: 100%;
+            padding: 1rem;
+            font-size: 1.1rem;
+            border-radius: 4px;
+            outline: none;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+        input:focus { border-color: var(--accent); }
+
+        .display { border-top: 1px solid #2d2f3b; padding-top: 2rem; text-align: center; }
+        .val-unit { font-size: 1rem; color: var(--text-dim); margin-left: 0.5rem; }
+        .val { font-size: 4rem; font-weight: bold; color: var(--text-main); line-height: 1; }
+
+        .status-badge {
+            margin-top: 1.5rem;
+            font-size: 0.75rem;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            background: #1f2029;
+            display: inline-block;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: bold;
+        }
+
+        /* Non-operational boundary state styling */
+        .out-of-bounds { opacity: 0.6; border-color: var(--error); }
+    </style>
+</head>
+<body>
+
+<div class="vessel-card" id="vesselCard">
+    <h1>Vessel Control // v1.1</h1>
+
+    <div class="input-row">
+        <div class="input-group">
+            <label>Legacy (°C)</label>
+            <input type="number" id="cInput" value="37" step="0.1" oninput="handleInput('C')">
+        </div>
+        <div class="input-group">
+            <label>Legacy (°F)</label>
+            <input type="number" id="fInput" value="98.6" step="0.1" oninput="handleInput('F')">
+        </div>
+    </div>
+
+    <div class="display">
+        <label>Current John Index</label>
+        <div>
+            <span id="jOutput" class="val">99.00</span><span class="val-unit">°J</span>
+        </div>
+        <div id="status" class="status-badge">Peak Performance</div>
+    </div>
+</div>
+
+<script>
+    /**
+     * CORE LOGIC: THE JOHN SCALE REFACTOR
+     * Anchors:
+     * 0°C (32°F) -> 33.333... (100/3)
+     * 37°C (98.6°F) -> 99.00
+     */
+    const REFACTOR = {
+        L_FREEZING_F: 32,
+        L_PEAK_F: 98.6,
+        J_FREEZING: 100 / 3,
+        J_PEAK: 99,
+
+        getSlope() {
+            return (this.J_PEAK - this.J_FREEZING) / (this.L_PEAK_F - this.L_FREEZING_F);
+        },
+
+        toJohn(f) {
+            return ((f - this.L_FREEZING_F) * this.getSlope()) + this.J_FREEZING;
+        }
+    };
+
+    function handleInput(source) {
+        const cInput = document.getElementById('cInput');
+        const fInput = document.getElementById('fInput');
+
+        let fVal;
+
+        // Sync inputs based on which one was edited
+        if (source === 'C') {
+            const cVal = parseFloat(cInput.value);
+            if (isNaN(cVal)) return;
+            fVal = (cVal * 9/5) + 32;
+            fInput.value = fVal.toFixed(1);
+        } else {
+            fVal = parseFloat(fInput.value);
+            if (isNaN(fVal)) return;
+            const cVal = (fVal - 32) * 5/9;
+            cInput.value = cVal.toFixed(1);
+        }
+
+        runRefactor(fVal);
+    }
+
+    function runRefactor(fVal) {
+        const output = document.getElementById('jOutput');
+        const status = document.getElementById('status');
+        const card = document.getElementById('vesselCard');
+
+        const jVal = REFACTOR.toJohn(fVal);
+        output.innerText = jVal.toFixed(2);
+
+        // Reset boundary state
+        card.classList.remove('out-of-bounds');
+
+        // System Monitoring State Logic (Based on README Usage)
+        if (jVal >= 100) {
+            status.innerText = "SYSTEM ERROR: OVERHEAT";
+            status.style.color = "var(--error)";
+            card.classList.add('out-of-bounds'); // Non-operational boundary
+        } else if (jVal >= 99) {
+            status.innerText = "Peak Performance (Deep Work)";
+            status.style.color = "var(--success)";
+        } else if (jVal >= 44.44) {
+            status.innerText = "Cosmic Warmth Equilibrium";
+            status.style.color = "var(--warmth)";
+        } else if (jVal <= 0) {
+            status.innerText = "ABSOLUTE ZERO: NON-OPERATIONAL";
+            status.style.color = "var(--error)";
+            card.classList.add('out-of-bounds'); // Non-operational boundary
+        } else if (jVal <= 33.34) {
+            status.innerText = "Environmental Hazard: Freezing";
+            status.style.color = "var(--accent)";
+        } else {
+            status.innerText = "Nominal System State";
+            status.style.color = "var(--text-dim)";
+        }
+    }
+
+    // Initialize on load
+    window.onload = () => handleInput('C');
+</script>
+
+</body>
+</html>
